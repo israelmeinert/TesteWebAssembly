@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animação de 300 Robôs Caminhando em 3D</title>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Função seed para AssemblyScript
+        function seed() {
+            return Math.random() * 4294967296;
+        }
+
+        fetch('build/release.wasm').then(response =>
+            response.arrayBuffer()
+        ).then(bytes =>
+            WebAssembly.instantiate(bytes, {
+                env: {
+                    memory: new WebAssembly.Memory({ initial: 256, maximum: 256 }),
+                    abort: () => console.log('abort called'),
+                    seed: seed
+                }
+            })
+        ).then(results => {
+            const { instance } = results;
+            const exports = instance.exports;
+
+            // Inicialize a cena Three.js
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Luzes
+            const light = new THREE.AmbientLight(0x404040);
+            scene.add(light);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(1, 1, 1).normalize();
+            scene.add(directionalLight);
+
+            // Criar robôs com AssemblyScript
+            const robotGeometry = new THREE.BoxGeometry(1, 2, 1);
+            const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+            const robots = [];
+
+            exports.createRobots(500000);
+
+            for (let i = 0; i < 500000; i++) {
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const robotMaterial = new THREE.MeshPhongMaterial({ color: color });
+                const robot = new THREE.Mesh(robotGeometry, robotMaterial);
+                robot.position.set(
+                    exports.getRobotX(i), // x: posição do robô
+                    1,                      // y: altura fixa
+                    exports.getRobotZ(i)  // z: posição do robô
+                );
+                scene.add(robot);
+                robots.push({ mesh: robot, speed: exports.getRobotSpeed(i) });
+            }
+
+            camera.position.z = 50;
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                exports.updateRobots();
+
+                robots.forEach((robot, index) => {
+                    robot.mesh.position.x = exports.getRobotX(index);
+                });
+
+                renderer.render(scene, camera);
+            }
+
+            animate();
+        });
+    </script>
+</body>
+</html>
